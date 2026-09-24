@@ -11,8 +11,7 @@ const app = express();
 
 app.use(
   cors({
-    // origin: "http://localhost:5173", // your Vite dev server
-    origin: "https://fliipkart-clone.netlify.app", //your Netlify link
+    origin: ["https://fliipkart-clone.netlify.app", "http://localhost:5173"], // Netlify Link and your Vite dev server
     credentials: true,
   }),
 );
@@ -25,5 +24,8 @@ app.use("/api/auth", authRouter);
 app.use("/api/payment", paymentRouter);
 app.use("/api/cart", cartRouter);
 app.use("/api/addresses", addressRouter);
+app.get("/", (req, res) => {
+  res.send("Flipkart clone backend is running");
+});
 
 export default app;
