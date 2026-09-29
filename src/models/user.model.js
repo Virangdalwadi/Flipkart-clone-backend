@@ -22,6 +22,11 @@ const userSchema = new mongoose.Schema(
       maxlength: [128, "Password must not exceed 128 characters"],
       select: false, // don't return password by default in queries
     },
+    role: {
+      type: String,
+      enum: ["admin", "user"],
+      default: "user",
+    },
   },
   {
     timestamps: true,

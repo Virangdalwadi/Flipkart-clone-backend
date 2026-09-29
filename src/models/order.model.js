@@ -1,29 +1,36 @@
 import mongoose from "mongoose";
 
-const orderItemSchema = new mongoose.Schema({
-  productId: {
-    type: String,
-    required: true,
+const orderItemSchema = new mongoose.Schema(
+  {
+    productId: {
+      type: String,
+      required: true,
+    },
+
+    title: {
+      type: String,
+      required: true,
+    },
+
+    price: {
+      type: Number,
+      required: true,
+    },
+
+    quantity: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+
+    subtotal: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
   },
-  title: {
-    type: String,
-    required: true,
-  },
-  price: {
-    type: Number,
-    required: true,
-  },
-  quantity: {
-    type: Number,
-    required: true,
-    min: 1,
-  },
-  subtotal: {
-    type: Number,
-    required: true,
-    min: 0,
-  },
-});
+  { _id: false },
+);
 
 const orderSchema = new mongoose.Schema(
   {
@@ -32,11 +39,13 @@ const orderSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+
     items: {
       type: [orderItemSchema],
       required: true,
       validate: (items) => items.length > 0,
     },
+
     shippingAddress: {
       name: {
         type: String,
@@ -95,35 +104,59 @@ const orderSchema = new mongoose.Schema(
         default: "home",
       },
     },
+
     subtotal: {
       type: Number,
       required: true,
       min: 0,
     },
+
     totalAmount: {
       type: Number,
       required: true,
       min: 0,
     },
+
     payment: {
-      method: { type: String, enum: ["razorpay"], required: true },
+      method: {
+        type: String,
+        enum: ["razorpay"],
+        required: true,
+      },
+
       status: {
         type: String,
         enum: ["pending", "paid", "failed"],
         default: "pending",
       },
-      razorpayOrderId: { type: String, required: true },
-      razorpayPaymentId: { type: String, required: true },
-      razorpaySignature: { type: String, required: true },
+
+      razorpayOrderId: {
+        type: String,
+        required: true,
+      },
+
+      razorpayPaymentId: {
+        type: String,
+        default: "",
+      },
+
+      razorpaySignature: {
+        type: String,
+        default: "",
+      },
     },
+
     orderStatus: {
       type: String,
       enum: ["PLACED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"],
       default: "PLACED",
     },
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+  },
 );
 
 export const Order = mongoose.model("Order", orderSchema);
+
 export default Order;
