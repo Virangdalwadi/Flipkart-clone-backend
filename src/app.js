@@ -14,7 +14,6 @@ const app = express();
 
 app.use(
   cors({
-    // Splits the comma-separated string into an array of URLs
     origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",") : [],
     credentials: true,
   }),

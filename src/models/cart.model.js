@@ -20,6 +20,9 @@ const cartItemSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    category: {
+      type: String,
+    },
     quantity: {
       type: Number,
       required: [true, "Quantity is required"],
@@ -52,5 +55,4 @@ const cartSchema = new mongoose.Schema(
 
 const Cart = mongoose.model("Cart", cartSchema);
 
-export { Cart };
 export default Cart;

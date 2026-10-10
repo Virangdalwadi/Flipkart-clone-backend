@@ -40,18 +40,20 @@ const validateItemInput = (body) => {
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const price = Number(body.price);
   const quantity = Number(body.quantity);
+  const category =
+    typeof body.category === "string" ? body.category.trim() : undefined;
 
   if (!productId)
-    return "Product ID is required and must be a positive integer";
-  if (!title) return "Product title is required";
+    return { error: "Product ID is required and must be a positive integer" };
+  if (!title) return { error: "Product title is required" };
   if (!Number.isFinite(price) || price <= 0) {
-    return "Price must be a valid positive number";
+    return { error: "Price must be a valid positive number" };
   }
   if (!Number.isInteger(quantity) || quantity < 1) {
-    return "Quantity must be a positive integer";
+    return { error: "Quantity must be a positive integer" };
   }
 
-  return null;
+  return { productId, title, price, quantity, category };
 };
 
 const handleDatabaseError = (res, error, fallbackMessage) => {
@@ -82,13 +84,14 @@ export async function getCart(req, res) {
 }
 
 export async function addToCart(req, res) {
-  const validationError = validateItemInput(req.body);
-  if (validationError) {
-    return res.status(400).json({ success: false, message: validationError });
+  const validatedItem = validateItemInput(req.body);
+  if (validatedItem.error) {
+    return res
+      .status(400)
+      .json({ success: false, message: validatedItem.error });
   }
 
-  const productId = parseProductId(req.body.productId);
-  const quantity = Number(req.body.quantity);
+  const { productId, title, price, quantity, category } = validatedItem;
 
   try {
     let cart = await Cart.findOne({ userId: req.user._id });
@@ -98,13 +101,17 @@ export async function addToCart(req, res) {
 
     if (existingItem) {
       existingItem.quantity += quantity;
+      if (category !== undefined) {
+        existingItem.category = category;
+      }
       await cart.save();
     } else if (cart) {
       cart.items.push({
         productId,
-        title: req.body.title.trim(),
-        price: Number(req.body.price),
+        title,
+        price,
         image: req.body.image,
+        category,
         quantity,
       });
       await cart.save();
@@ -114,9 +121,10 @@ export async function addToCart(req, res) {
         items: [
           {
             productId,
-            title: req.body.title.trim(),
-            price: Number(req.body.price),
+            title,
+            price,
             image: req.body.image,
+            category,
             quantity,
           },
         ],
@@ -131,6 +139,7 @@ export async function addToCart(req, res) {
 
 export async function mergeGuestCart(req, res) {
   const guestItems = Array.isArray(req.body?.items) ? req.body.items : [];
+  
   if (!guestItems.length) {
     return res.status(200).json({
       success: true,

@@ -8,7 +8,7 @@ import Session from "../models/session.model.js";
 const refreshCookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
-  sameSite: "none",
+  sameSite: "strict",
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
@@ -166,10 +166,7 @@ export async function register(req, res) {
     });
   }
 }
-/**
- * LOGIN API ENDPOINT
- * Inputs: email, password
- */
+
 export async function login(req, res) {
   try {
     const email = req.body.email?.trim().toLowerCase();
