@@ -26,6 +26,7 @@ const commonPasswords = new Set([
   "changeme",
 ]);
 
+// Password Validation
 const getPasswordValidationError = (password, username, email) => {
   if (password.length < 8) return "Password must be at least 8 characters long";
   if (password.length > 128) return "Password must not exceed 128 characters";
@@ -75,6 +76,7 @@ const getPasswordValidationError = (password, username, email) => {
   return null;
 };
 
+// Register
 export async function register(req, res) {
   try {
     const username = req.body.username?.trim();
@@ -109,6 +111,7 @@ export async function register(req, res) {
       username,
       email,
       password: hashedPassword,
+      role: "user",
     });
 
     const refreshtoken = jwt.sign({ id: user._id }, config.JWT_SECRET, {
@@ -142,7 +145,11 @@ export async function register(req, res) {
       message: "User registered successfully",
       user: {
         username: user.username,
+        lastName: user.lastName,
+        gender: user.gender,
+        mobile: user.mobile,
         email: user.email,
+        role: user.role,
       },
       accesstoken,
     });
@@ -167,6 +174,7 @@ export async function register(req, res) {
   }
 }
 
+// Login
 export async function login(req, res) {
   try {
     const email = req.body.email?.trim().toLowerCase();
@@ -194,6 +202,9 @@ export async function login(req, res) {
       return res.status(401).json({
         message: "Invalid email or password",
       });
+    }
+    if (user.isActive === false) {
+      return res.status(403).json({ message: "Account is deactivated" });
     }
 
     // 4. Generate a new refresh token
@@ -231,7 +242,11 @@ export async function login(req, res) {
       message: "Login successful",
       user: {
         username: user.username,
+        lastName: user.lastName,
+        gender: user.gender,
+        mobile: user.mobile,
         email: user.email,
+        role: user.role,
       },
       accesstoken,
     });
@@ -242,6 +257,7 @@ export async function login(req, res) {
   }
 }
 
+// Get me
 export async function getme(req, res) {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -254,15 +270,19 @@ export async function getme(req, res) {
     const decoded = jwt.verify(token, config.JWT_SECRET);
     const user = await User.findById(decoded.id);
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    if (!user || user.isActive === false) {
+      return res.status(401).json({ message: "Account is unavailable" });
     }
 
     return res.status(200).json({
       message: "User Fetched Successfully",
       user: {
         username: user.username,
+        lastName: user.lastName,
+        gender: user.gender,
+        mobile: user.mobile,
         email: user.email,
+        role: user.role,
       },
     });
   } catch (error) {
@@ -272,6 +292,70 @@ export async function getme(req, res) {
   }
 }
 
+export async function updateProfile(req, res) {
+  const { username, lastName, gender, mobile } = req.body;
+  const updates = {};
+
+  if (username !== undefined) {
+    if (typeof username !== "string" || !username.trim()) {
+      return res.status(400).json({ message: "First name is required" });
+    }
+    updates.username = username.trim();
+  }
+
+  if (lastName !== undefined) {
+    if (typeof lastName !== "string") {
+      return res.status(400).json({ message: "Last name must be text" });
+    }
+    updates.lastName = lastName.trim();
+  }
+
+  if (gender !== undefined) {
+    if (!["male", "female"].includes(gender)) {
+      return res.status(400).json({ message: "Select a valid gender" });
+    }
+    updates.gender = gender;
+  }
+
+  if (mobile !== undefined) {
+    if (typeof mobile !== "string" || !/^[6-9]\d{9}$/.test(mobile.trim())) {
+      return res.status(400).json({
+        message: "Enter a valid 10-digit Indian mobile number",
+      });
+    }
+    updates.mobile = mobile.trim();
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ message: "No profile information provided" });
+  }
+
+  try {
+    Object.assign(req.user, updates);
+    await req.user.save();
+
+    return res.status(200).json({
+      message: "Profile updated successfully",
+      user: {
+        username: req.user.username,
+        lastName: req.user.lastName,
+        gender: req.user.gender,
+        mobile: req.user.mobile,
+        email: req.user.email,
+        role: req.user.role,
+      },
+    });
+  } catch (error) {
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        message: Object.values(error.errors)[0]?.message || "Invalid profile data",
+      });
+    }
+    return res.status(500).json({ message: "Unable to update profile" });
+  }
+}
+
+// Referesh Token
 export async function refreshtoken(req, res) {
   try {
     const refreshtoken = req.cookies.refreshtoken;
@@ -295,9 +379,18 @@ export async function refreshtoken(req, res) {
     });
 
     if (!session) {
+      res.clearCookie("refreshtoken", refreshCookieOptions);
       return res.status(401).json({
         message: "Invalid refresh Token",
       });
+    }
+
+    const user = await User.findById(decoded.id);
+    if (!user || user.isActive === false) {
+      session.revoked = true;
+      await session.save();
+      res.clearCookie("refreshtoken", refreshCookieOptions);
+      return res.status(401).json({ message: "Account is deactivated" });
     }
 
     const accesstoken = jwt.sign(
@@ -334,6 +427,7 @@ export async function refreshtoken(req, res) {
   }
 }
 
+// Logout
 export async function logout(req, res) {
   try {
     const refreshtoken = req.cookies.refreshtoken;

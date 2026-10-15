@@ -29,6 +29,9 @@ export async function protect(req, res, next) {
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
+    if (user.isActive === false) {
+      return res.status(401).json({ message: "Account is deactivated" });
+    }
 
     req.user = user;
     next();

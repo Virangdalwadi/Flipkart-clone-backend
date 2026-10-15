@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as authController from "../controllers/auth.controller.js";
+import { protect } from "../middleware/authMiddleware.js";
 
 const authRouter = Router();
 
@@ -10,7 +11,10 @@ authRouter.post("/register", authController.register);
 authRouter.post("/login", authController.login);
 
 // GET -> /api/auth/get-me
-authRouter.get("/get-me", authController.getme);
+authRouter.get("/get-me", protect, authController.getme);
+
+// PATCH -> /api/auth/profile
+authRouter.patch("/profile", protect, authController.updateProfile);
 
 // GET -> /api/auth/refresh-token
 authRouter.get("/refresh-token", authController.refreshtoken);

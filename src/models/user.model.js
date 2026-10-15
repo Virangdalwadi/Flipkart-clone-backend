@@ -7,6 +7,20 @@ const userSchema = new mongoose.Schema(
       required: [true, "Username is required"],
       trim: true,
     },
+    lastName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    gender: {
+      type: String,
+      enum: ["male", "female"],
+    },
+    mobile: {
+      type: String,
+      trim: true,
+      match: [/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile number"],
+    },
     email: {
       type: String,
       required: [true, "Email is required"],
@@ -26,6 +40,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["admin", "user"],
       default: "user",
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
   },
   {

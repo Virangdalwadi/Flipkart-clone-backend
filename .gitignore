@@ -7,6 +7,9 @@ jspm_packages/
 .env.local
 .env.production
 
+# Ignore data.json everywhere in the project
+data.json
+
 # Logs
 logs
 *.log
@@ -17,3 +20,5 @@ yarn-error.log*
 # Optional IDE folders
 .vscode/
 .idea/
+scripts/
+

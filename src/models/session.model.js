@@ -23,6 +23,12 @@ const sessionSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    expiresAt: {
+      type: Date,
+      required: true,
+      default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Default to 30 days from now
+      index: { expires: 0 }, // Tells MongoDB to delete the document exactly when expiresAt is reached
+    },
   },
   {
     timestamps: true,

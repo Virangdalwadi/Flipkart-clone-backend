@@ -81,6 +81,7 @@ const calculateTotals = (items) => {
   return { subtotal, totalAmount: subtotal };
 };
 
+// Creater Order
 export async function createRazorpayOrder(req, res) {
   try {
     const items = normalizeItems(req.body.items);
@@ -121,6 +122,7 @@ export async function createRazorpayOrder(req, res) {
   }
 }
 
+// Verify Payment
 export async function verifyPayment(req, res) {
   try {
     const {
