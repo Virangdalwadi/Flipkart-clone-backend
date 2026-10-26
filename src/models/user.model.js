@@ -38,8 +38,18 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["admin", "user"],
+      enum: ["admin", "user", "seller"],
       default: "user",
+    },
+    profileImage: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    profileImagePublicId: {
+      type: String,
+      default: "",
+      trim: true,
     },
     isActive: {
       type: Boolean,

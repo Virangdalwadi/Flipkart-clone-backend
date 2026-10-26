@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import config from "../config/config.js";
+import cloudinary from "../config/cloudinary.js";
 import Session from "../models/session.model.js";
 
 const refreshCookieOptions = {
@@ -150,6 +151,7 @@ export async function register(req, res) {
         mobile: user.mobile,
         email: user.email,
         role: user.role,
+        profileImage: user.profileImage,
       },
       accesstoken,
     });
@@ -247,6 +249,7 @@ export async function login(req, res) {
         mobile: user.mobile,
         email: user.email,
         role: user.role,
+        profileImage: user.profileImage,
       },
       accesstoken,
     });
@@ -283,6 +286,7 @@ export async function getme(req, res) {
         mobile: user.mobile,
         email: user.email,
         role: user.role,
+        profileImage: user.profileImage,
       },
     });
   } catch (error) {
@@ -292,6 +296,7 @@ export async function getme(req, res) {
   }
 }
 
+// Update Profile
 export async function updateProfile(req, res) {
   const { username, lastName, gender, mobile } = req.body;
   const updates = {};
@@ -343,16 +348,206 @@ export async function updateProfile(req, res) {
         mobile: req.user.mobile,
         email: req.user.email,
         role: req.user.role,
+        profileImage: req.user.profileImage,
       },
     });
   } catch (error) {
     if (error.name === "ValidationError") {
       return res.status(400).json({
-        message: Object.values(error.errors)[0]?.message || "Invalid profile data",
+        message:
+          Object.values(error.errors)[0]?.message || "Invalid profile data",
       });
     }
     return res.status(500).json({ message: "Unable to update profile" });
   }
+}
+
+const PROFILE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const PROFILE_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+function getProfileImageFormat(buffer, mimeType) {
+  if (
+    mimeType === "image/jpeg" &&
+    buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))
+  ) {
+    return "jpg";
+  }
+  if (
+    mimeType === "image/png" &&
+    buffer
+      .subarray(0, 8)
+      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  ) {
+    return "png";
+  }
+  if (
+    mimeType === "image/webp" &&
+    buffer.toString("ascii", 0, 4) === "RIFF" &&
+    buffer.toString("ascii", 8, 12) === "WEBP"
+  ) {
+    return "webp";
+  }
+  return null;
+}
+
+function uploadProfileImage(buffer, publicId) {
+  return new Promise((resolve, reject) => {
+    const upload = cloudinary.uploader.upload_stream(
+      {
+        public_id: publicId,
+        resource_type: "image",
+        allowed_formats: ["jpg", "jpeg", "png", "webp"],
+      },
+      (error, result) => {
+        if (error) {
+          reject(error);
+        } else if (!result?.secure_url || !result.public_id) {
+          reject(new Error("Cloudinary returned an incomplete image upload"));
+        } else {
+          resolve(result);
+        }
+      },
+    );
+    upload.end(buffer);
+  });
+}
+
+function isOwnedProfileImage(user, publicId) {
+  if (!publicId || typeof publicId !== "string") return false;
+  const folder = `profile-images/${user._id}`;
+  return publicId.startsWith(`${folder}/`) && !publicId.includes("..");
+}
+
+async function deleteOwnedProfileImage(user, publicId) {
+  if (!isOwnedProfileImage(user, publicId)) return false;
+  const result = await cloudinary.uploader.destroy(publicId, {
+    resource_type: "image",
+    invalidate: true,
+  });
+  return result?.result === "ok" || result?.result === "not found";
+}
+
+export async function updateProfileImage(req, res) {
+  const mimeType = req.headers["content-type"]
+    ?.split(";")[0]
+    .trim()
+    .toLowerCase();
+  if (!PROFILE_IMAGE_MIME_TYPES.has(mimeType)) {
+    return res.status(415).json({
+      message: "Upload a JPG, JPEG, PNG, or WebP image",
+    });
+  }
+  if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+    return res.status(400).json({ message: "An image file is required" });
+  }
+  if (req.body.length > PROFILE_IMAGE_MAX_BYTES) {
+    return res.status(413).json({ message: "Image must be 5 MB or smaller" });
+  }
+
+  if (!getProfileImageFormat(req.body, mimeType)) {
+    return res
+      .status(400)
+      .json({ message: "The image file is invalid or unsupported" });
+  }
+
+  const folder = `profile-images/${req.user._id}`;
+  const publicId = `${folder}/${crypto.randomUUID()}`;
+  let uploaded;
+  try {
+    uploaded = await uploadProfileImage(req.body, publicId);
+  } catch (error) {
+    console.error("Cloudinary profile image upload failed:", error);
+    return res.status(502).json({ message: "Unable to upload profile image" });
+  }
+
+  const oldPublicId = req.user.profileImagePublicId;
+  req.user.profileImage = uploaded.secure_url;
+  req.user.profileImagePublicId = uploaded.public_id;
+  try {
+    await req.user.save();
+  } catch (error) {
+    try {
+      const deleted = await deleteOwnedProfileImage(
+        req.user,
+        uploaded.public_id,
+      );
+      if (!deleted) {
+        console.error("Cloudinary did not remove the unsaved profile image");
+      }
+    } catch (cleanupError) {
+      console.error(
+        "Unable to clean up an unsaved profile image:",
+        cleanupError,
+      );
+    }
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        message:
+          Object.values(error.errors)[0]?.message || "Invalid profile image",
+      });
+    }
+    console.error("Unable to save profile image:", error);
+    return res.status(500).json({ message: "Unable to save profile image" });
+  }
+
+  let warning;
+  try {
+    if (oldPublicId && oldPublicId !== uploaded.public_id) {
+      const deleted = await deleteOwnedProfileImage(req.user, oldPublicId);
+      if (!deleted) warning = "The previous profile image could not be removed";
+    }
+  } catch (error) {
+    console.error("Unable to remove the previous profile image:", error);
+    warning = "The previous profile image could not be removed";
+  }
+
+  return res.status(200).json({
+    message: "Profile image updated successfully",
+    user: {
+      profileImage: req.user.profileImage,
+    },
+    ...(warning ? { warning } : {}),
+  });
+}
+
+export async function removeProfileImage(req, res) {
+  const oldPublicId = req.user.profileImagePublicId;
+  req.user.profileImage = "";
+  req.user.profileImagePublicId = "";
+
+  try {
+    await req.user.save();
+  } catch (error) {
+    console.error("Unable to remove profile image:", error);
+    return res.status(500).json({ message: "Unable to remove profile image" });
+  }
+
+  let warning;
+  try {
+    if (oldPublicId) {
+      const deleted = await deleteOwnedProfileImage(req.user, oldPublicId);
+      if (!deleted)
+        warning =
+          "The profile image was removed, but its stored file could not be deleted";
+    }
+  } catch (error) {
+    console.error(
+      "Unable to delete removed profile image from Cloudinary:",
+      error,
+    );
+    warning =
+      "The profile image was removed, but its stored file could not be deleted";
+  }
+
+  return res.status(200).json({
+    message: "Profile image removed successfully",
+    user: { profileImage: "" },
+    ...(warning ? { warning } : {}),
+  });
 }
 
 // Referesh Token

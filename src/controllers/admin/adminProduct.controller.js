@@ -26,7 +26,7 @@ const sortableFields = new Set([
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-function validateProductFields(body, { partial = false } = {}) {
+export function validateProductFields(body, { partial = false } = {}) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return { error: "Product data must be an object" };
   }
